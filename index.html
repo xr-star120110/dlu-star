@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大连海洋大学 · 知识星图</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#030810;overflow-x:hidden;font-family:'Microsoft YaHei','PingFang SC',sans-serif;color:#fff;min-height:100vh}
+canvas#bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+.page{position:relative;z-index:1;min-height:100vh;display:none;animation:fadeUp .5s ease}
+.page.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+/* ===== 首页 ===== */
+.hero{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:40px 20px}
+.hero-badge{display:inline-block;padding:6px 20px;border:1px solid rgba(110,168,254,.2);border-radius:20px;font-size:.75rem;color:rgba(255,255,255,.4);margin-bottom:24px;letter-spacing:2px;background:rgba(110,168,254,.04)}
+.hero h1{font-size:3.2rem;font-weight:700;letter-spacing:10px;background:linear-gradient(135deg,#6ea8fe,#c084fc,#fb7185);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
+.hero .sub{font-size:1.05rem;color:rgba(255,255,255,.35);margin-bottom:40px;letter-spacing:3px}
+.hero-btn{padding:16px 64px;font-size:1.05rem;letter-spacing:5px;border:1.5px solid rgba(110,168,254,.3);background:rgba(110,168,254,.05);color:#8bb8ff;border-radius:50px;cursor:pointer;transition:all .3s;backdrop-filter:blur(6px)}
+.hero-btn:hover{background:rgba(110,168,254,.15);border-color:rgba(110,168,254,.5);box-shadow:0 0 40px rgba(110,168,254,.2);color:#fff}
+
+/* ===== 通用导航页 ===== */
+.nav-page{padding:80px 40px 40px;max-width:1200px;margin:0 auto}
+.nav-top{display:flex;align-items:center;gap:14px;margin-bottom:40px}
+.nav-back{padding:8px 20px;background:rgba(110,168,254,.08);border:1px solid rgba(110,168,254,.2);color:#8bb8ff;border-radius:20px;cursor:pointer;font-size:.85rem;transition:all .3s}
+.nav-back:hover{background:rgba(110,168,254,.18)}
+.nav-title{font-size:1.6rem;background:linear-gradient(135deg,#6ea8fe,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-breadcrumb{font-size:.75rem;color:rgba(255,255,255,.3);margin-left:auto}
+.nav-desc{font-size:.9rem;color:rgba(255,255,255,.35);margin-bottom:30px}
+
+/* 学院卡片网格 */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.card{background:rgba(10,16,40,.7);border:1px solid rgba(110,168,254,.1);border-radius:14px;padding:24px;cursor:pointer;transition:all .35s;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent,rgba(110,168,254,.4)),transparent);opacity:0;transition:opacity .3s}
+.card:hover{border-color:rgba(110,168,254,.3);transform:translateY(-4px);box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.card:hover::before{opacity:1}
+.card-icon{font-size:2rem;margin-bottom:12px}
+.card-name{font-size:1.1rem;color:#e0e8ff;font-weight:600;margin-bottom:6px}
+.card-count{font-size:.75rem;color:rgba(255,255,255,.3)}
+.card-arrow{position:absolute;right:18px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.15);font-size:1.2rem;transition:all .3s}
+.card:hover .card-arrow{color:rgba(255,255,255,.5);transform:translateY(-50%) translateX(4px)}
+
+/* ===== 星图页 ===== */
+.starmap-page{position:fixed;top:0;left:0;width:100%;height:100%;display:none;z-index:50}
+.starmap-page.active{display:block}
+.starmap-top{position:fixed;top:0;left:0;right:0;padding:16px 30px;display:flex;align-items:center;gap:14px;background:rgba(3,8,16,.85);backdrop-filter:blur(12px);border-bottom:1px solid rgba(110,168,254,.1);z-index:60}
+.starmap-top h2{font-size:1.1rem;background:linear-gradient(135deg,#6ea8fe,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.starmap-bc{font-size:.7rem;color:rgba(255,255,255,.25);margin-left:auto}
+
+.cLayer{position:absolute;top:0;left:0;width:100%;height:100%;transition:all .7s cubic-bezier(.25,.46,.45,.94)}
+.cLayer.zoomed{opacity:0;pointer-events:none;transform:scale(1.8)}
+.cLine{position:absolute;height:1.5px;transform-origin:left center;pointer-events:none;z-index:2}
+.cStar{position:absolute;border-radius:50%;pointer-events:none;z-index:3}
+.cStarGlow{position:absolute;border-radius:50%;pointer-events:none;z-index:2}
+.cLabel{position:absolute;cursor:pointer;text-align:center;z-index:10;transition:all .3s}
+.cLabel:hover{transform:scale(1.2)}
+.cLabel:hover .cName{text-shadow:0 0 20px var(--gc)}
+.cName{font-size:.82rem;color:rgba(255,255,255,.82);white-space:nowrap;letter-spacing:1.5px;transition:text-shadow .3s}
+.cSub{font-size:.58rem;color:rgba(255,255,255,.28);margin-top:3px}
+
+/* 右侧面板 */
+.side-panel{position:fixed;top:0;right:0;width:420px;height:100vh;background:rgba(5,10,28,.93);backdrop-filter:blur(20px);border-left:1px solid rgba(110,168,254,.12);z-index:70;transform:translateX(100%);transition:transform .45s cubic-bezier(.25,.46,.45,.94);overflow-y:auto;padding:28px 24px}
+.side-panel.open{transform:translateX(0)}
+.side-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:rgba(255,255,255,.5);font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s}
+.side-close:hover{background:rgba(255,255,255,.1);color:#fff}
+.side-head{text-align:center;padding:20px 0 24px;border-bottom:1px solid rgba(110,168,254,.1);margin-bottom:20px}
+.side-head h3{font-size:1.4rem;background:linear-gradient(135deg,#6ea8fe,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.side-head .desc{font-size:.8rem;color:rgba(255,255,255,.35);margin-top:4px}
+.grade-btns{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.grade-btn{padding:8px 18px;border-radius:20px;border:1px solid rgba(110,168,254,.18);background:rgba(110,168,254,.05);color:#8bb8ff;font-size:.85rem;cursor:pointer;transition:all .3s}
+.grade-btn:hover,.grade-btn.active{background:rgba(110,168,254,.18);border-color:rgba(110,168,254,.45);color:#fff}
+.unit-grid{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px}
+.unit-col{min-width:140px;flex:1;background:rgba(110,168,254,.03);border:1px solid rgba(110,168,254,.08);border-radius:10px;padding:12px;flex-shrink:0}
+.unit-col-title{font-size:.75rem;color:#8bb8ff;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(110,168,254,.08);font-weight:600;letter-spacing:1px}
+.unit-item{padding:6px 8px;margin-bottom:4px;border-radius:6px;font-size:.72rem;color:rgba(255,255,255,.6);cursor:pointer;transition:all .25s;line-height:1.4}
+.unit-item:hover{background:rgba(110,168,254,.1);color:rgba(255,255,255,.9)}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:65;opacity:0;pointer-events:none;transition:opacity .3s}
+.overlay.show{opacity:1;pointer-events:auto}
+
+/* 脑图页 */
+.mindmap-page{position:fixed;top:0;left:0;width:100%;height:100%;display:none;z-index:80;background:rgba(3,8,16,.96);overflow:auto}
+.mindmap-page.show{display:block}
+.mm-header{padding:20px 32px;display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(110,168,254,.08);background:rgba(5,10,28,.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:5}
+.mm-back{padding:8px 20px;background:rgba(110,168,254,.08);border:1px solid rgba(110,168,254,.2);color:#8bb8ff;border-radius:20px;cursor:pointer;font-size:.85rem;transition:all .3s}
+.mm-back:hover{background:rgba(110,168,254,.18)}
+.mm-title{font-size:1.2rem;background:linear-gradient(135deg,#6ea8fe,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.mm-bc{font-size:.7rem;color:rgba(255,255,255,.25);margin-left:auto}
+.mm-body{padding:40px}
+.mm-center{display:flex;flex-direction:column;align-items:center}
+.mm-root{padding:16px 32px;background:linear-gradient(135deg,rgba(110,168,254,.12),rgba(192,132,252,.12));border:1.5px solid rgba(110,168,254,.25);border-radius:14px;font-size:1rem;font-weight:600;color:#c8d8ff;text-align:center;box-shadow:0 0 30px rgba(110,168,254,.12);letter-spacing:1px}
+.mm-branches{display:flex;gap:24px;margin-top:30px;position:relative;justify-content:center;flex-wrap:wrap}
+.mm-branches::before{content:'';position:absolute;top:-30px;left:50%;width:1px;height:30px;background:rgba(110,168,254,.15)}
+.mm-node{position:relative;padding:14px 18px;background:rgba(110,168,254,.04);border:1px solid rgba(110,168,254,.1);border-radius:10px;min-width:150px;max-width:220px;text-align:center;transition:all .3s}
+.mm-node::before{content:'';position:absolute;top:-14px;left:50%;width:1px;height:14px;background:rgba(110,168,254,.15)}
+.mm-node:hover{background:rgba(110,168,254,.1);border-color:rgba(110,168,254,.3);transform:translateY(-3px)}
+.mm-node-title{font-size:.85rem;color:#c8d8ff;margin-bottom:4px;font-weight:500}
+.mm-node-sub{font-size:.7rem;color:rgba(255,255,255,.3)}
+.mm-node-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.6rem;margin-top:6px}
+.tag-note{background:rgba(100,180,255,.1);color:#8ab4ff;border:1px solid rgba(100,180,255,.15)}
+.tag-video{background:rgba(255,100,100,.1);color:#ff6b6b;border:1px solid rgba(255,100,100,.15)}
+.tag-ppt{background:rgba(255,180,100,.1);color:#ffb464;border:1px solid rgba(255,180,100,.15)}
+.tag-doc{background:rgba(100,255,180,.1);color:#64ffb4;border:1px solid rgba(100,255,180,.15)}
+.mm-sub{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid rgba(110,168,254,.06)}
+.mm-sub-item{padding:5px 10px;border-radius:6px;font-size:.7rem;color:rgba(255,255,255,.5);cursor:pointer;transition:all .2s;text-align:left}
+.mm-sub-item:hover{background:rgba(110,168,254,.08);color:rgba(255,255,255,.85)}
+.mm-sub-item.video-item{color:#ff6b6b}
+.mm-sub-item.video-item:hover{background:rgba(255,100,100,.1)}
+.mm-sub-item.ppt-item{color:#ffb464}
+.mm-sub-item.ppt-item:hover{background:rgba(255,180,100,.1)}
+.mm-sub-item.doc-item{color:#64ffb4}
+.mm-sub-item.doc-item:hover{background:rgba(100,255,180,.1)}
+
+/* 视频播放器 */
+.video-player{position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;background:rgba(0,0,0,.95);display:none;align-items:center;justify-content:center}
+.video-player.show{display:flex}
+.video-container{position:relative;width:90%;max-width:1200px;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 0 50px rgba(0,0,0,.5)}
+.video-header{padding:16px 24px;background:rgba(20,20,30,.95);display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.video-title{font-size:1.1rem;color:#fff;flex:1}
+.video-close{padding:8px 16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;cursor:pointer;font-size:.85rem;transition:all .3s}
+.video-close:hover{background:rgba(255,100,100,.3)}
+.video-element{width:100%;aspect-ratio:16/9;background:#000}
+.video-list{padding:16px 24px;background:rgba(20,20,30,.95);display:flex;gap:10px;overflow-x:auto;border-top:1px solid rgba(255,255,255,.1)}
+.video-list-item{padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:.8rem;cursor:pointer;transition:all .3s;white-space:nowrap}
+.video-list-item:hover,.video-list-item.active{background:rgba(255,100,100,.2);border-color:rgba(255,100,100,.4);color:#fff}
+
+/* PPT查看器 */
+.ppt-viewer{position:fixed;top:0;left:0;width:100%;height:100%;z-index:100;background:rgba(0,0,0,.95);display:none;align-items:center;justify-content:center}
+.ppt-viewer.show{display:flex}
+.ppt-container{position:relative;width:90%;max-width:1200px;height:80vh;background:#1a1a2e;border-radius:12px;overflow:hidden;box-shadow:0 0 50px rgba(0,0,0,.5)}
+.ppt-header{padding:16px 24px;background:rgba(20,20,30,.95);display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.ppt-title{font-size:1.1rem;color:#fff;flex:1}
+.ppt-close{padding:8px 16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;cursor:pointer;font-size:.85rem;transition:all .3s}
+.ppt-close:hover{background:rgba(255,180,100,.3)}
+.ppt-content{width:100%;height:calc(100% - 60px);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:1.2rem}
+.ppt-list{padding:16px 24px;background:rgba(20,20,30,.95);display:flex;gap:10px;overflow-x:auto;border-top:1px solid rgba(255,255,255,.1)}
+.ppt-list-item{padding:8px 16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:.8rem;cursor:pointer;transition:all .3s;white-space:nowrap}
+.ppt-list-item:hover,.ppt-list-item.active{background:rgba(255,180,100,.2);border-color:rgba(255,180,100,.4);color:#fff}
+
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(110,168,254,.12);border-radius:3px}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+
+<!-- ===== 第0层：首页 ===== -->
+<div class="page active" id="page0">
+  <div class="hero">
+    <div class="hero-badge">大连海洋大学 · DLU</div>
+    <h1>知 识 星 图</h1>
+    <p class="sub">探索每一个学院，点亮每一颗知识之星</p>
+    <button class="hero-btn" onclick="goPage(1)">进 入 星 图</button>
+  </div>
+</div>
+
+<!-- ===== 第1层：选择学院 ===== -->
+<div class="page" id="page1">
+  <div class="nav-page">
+    <div class="nav-top">
+      <button class="nav-back" onclick="goPage(0)">← 返回</button>
+      <div class="nav-title">选择学院</div>
+      <div class="nav-bc">首页 / 学院</div>
+    </div>
+    <div class="nav-desc">大连海洋大学共设有 12 个二级学院，选择你所在的学院</div>
+    <div class="card-grid" id="collegeGrid"></div>
+  </div>
+</div>
+
+<!-- ===== 第2层：选择专业 ===== -->
+<div class="page" id="page2">
+  <div class="nav-page">
+    <div class="nav-top">
+      <button class="nav-back" onclick="goPage(1)">← 返回</button>
+      <div class="nav-title" id="majorTitle">选择专业</div>
+      <div class="nav-bc" id="majorBC">首页 / 学院 / 专业</div>
+    </div>
+    <div class="nav-desc" id="majorDesc">选择你所在的专业</div>
+    <div class="card-grid" id="majorGrid"></div>
+  </div>
+</div>
+
+<!-- ===== 第3层：星图 ===== -->
+<div class="starmap-page" id="page3">
+  <div class="starmap-top">
+    <button class="nav-back" onclick="backToMajors()">← 返回</button>
+    <h2 id="starmapTitle">知识星图</h2>
+    <div class="starmap-bc" id="starmapBC"></div>
+  </div>
+  <div class="cLayer" id="cLayer"></div>
+</div>
+
+<!-- 右侧面板 -->
+<div class="overlay" id="overlay" onclick="closeSide()"></div>
+<div class="side-panel" id="sidePanel">
+  <button class="side-close" onclick="closeSide()">✕</button>
+  <div id="sideContent"></div>
+</div>
+
+<!-- 脑图页 -->
+<div class="mindmap-page" id="mindmapPage">
+  <div class="mm-header">
+    <button class="mm-back" onclick="closeMindmap()">← 返回星图</button>
+    <div class="mm-title" id="mmTitle"></div>
+    <div class="mm-bc" id="mmBC"></div>
+  </div>
+  <div class="mm-body" id="mmBody"></div>
+</div>
+
+<!-- 视频播放器 -->
+<div class="video-player" id="videoPlayer">
+  <div class="video-container">
+    <div class="video-header">
+      <div class="video-title" id="videoTitle">视频播放</div>
+      <button class="video-close" onclick="closeVideo()">✕ 关闭</button>
+    </div>
+    <video class="video-element" id="videoElement" controls>
+      <source id="videoSource" src="" type="video/mp4">
+      您的浏览器不支持视频播放
+    </video>
+    <div class="video-list" id="videoList"></div>
+  </div>
+</div>
+
+<!-- PPT查看器 -->
+<div class="ppt-viewer" id="pptViewer">
+  <div class="ppt-container">
+    <div class="ppt-header">
+      <div class="ppt-title" id="pptTitle">PPT查看</div>
+      <button class="ppt-close" onclick="closePpt()">✕ 关闭</button>
+    </div>
+    <div class="ppt-content" id="pptContent">
+      <div style="text-align:center">
+        <div style="font-size:3rem;margin-bottom:20px">📄</div>
+        <div>正在加载PPT文件...</div>
+        <div style="font-size:.8rem;margin-top:10px;color:rgba(255,255,255,.3)">提示：PPT文件需要下载后使用Office/WPS打开</div>
+      </div>
+    </div>
+    <div class="ppt-list" id="pptList"></div>
+  </div>
+</div>
+
+<script>
+// ===== 星空背景 =====
+const cv=document.getElementById('bg'),cx=cv.getContext('2d');let bgS=[];
+function rc(){cv.width=innerWidth;cv.height=innerHeight}
+function ib(){bgS=[];for(let i=0;i<700;i++)bgS.push({x:Math.random()*cv.width,y:Math.random()*cv.height,r:Math.random()*1.6+.2,s:Math.random()*.01+.002,p:Math.random()*Math.PI*2,b:Math.random()>.93})}
+function db(){cx.clearRect(0,0,cv.width,cv.height);const t=Date.now()*.001;bgS.forEach(s=>{const a=.12+.88*Math.abs(Math.sin(t*s.s*50+s.p));cx.beginPath();cx.arc(s.x,s.y,s.r,0,Math.PI*2);cx.fillStyle=s.b?`rgba(220,230,255,${a})`:`rgba(160,180,240,${a*.6})`;cx.fill();if(s.b&&a>.7){cx.beginPath();cx.arc(s.x,s.y,s.r*4,0,Math.PI*2);cx.fillStyle=`rgba(180,200,255,${a*.06})`;cx.fill()}});requestAnimationFrame(db)}
+rc();ib();db();addEventListener('resize',()=>{rc();ib();if(document.getElementById('page3').classList.contains('active'))layoutC()});
+
+// ===== 大连海洋大学学院数据 =====
+const COLLEGES=[
+  {id:1,name:'水产与生命学院',icon:'🐟',accent:'#4fc3f7',
+   majors:[
+    {id:'a1',name:'水产养殖学',subjects:['鱼类学','水族科学导论','水产动物疾病学','水化学','鱼类遗传育种学','水产动物营养与饲料学','养殖水化学']},
+    {id:'a2',name:'水族科学与技术',subjects:['大学化学C','大学计算机基础','高等数学C','普通动物学','大学英语一','生物统计及应用','海洋动物学','有机化学','大学英语二']},
+    {id:'a3',name:'海洋生物资源与环境',subjects:['海洋生态学','海洋生物学','环境监测','海洋资源学','海洋环境保护']},
+    {id:'a4',name:'生物科学',subjects:['细胞生物学','分子生物学','微生物学','遗传学','生物化学']},
+  ]},
+  {id:2,name:'海洋与土木工程学院',icon:'🌊',accent:'#29b6f6',
+   majors:[
+    {id:'b1',name:'港口航道与海岸工程',subjects:['港口规划','航道工程','海岸动力学','水工建筑物']},
+    {id:'b2',name:'海洋资源开发技术',subjects:['海洋资源概论','海洋工程','深海采矿技术']},
+    {id:'b3',name:'土木工程',subjects:['结构力学','混凝土结构','建筑施工','工程造价']},
+  ]},
+  {id:3,name:'航海与船舶工程学院',icon:'⚓',accent:'#42a5f5',
+   majors:[
+    {id:'c1',name:'船舶与海洋工程',subjects:['船舶设计原理','船舶建造工艺','海洋工程结构','流体力学']},
+    {id:'c2',name:'航海技术',subjects:['船舶操纵','航海学','船舶避碰','海上搜救']},
+    {id:'c3',name:'轮机工程',subjects:['船舶柴油机','船舶辅机','轮机自动化','船舶电气']},
+  ]},
+  {id:4,name:'信息工程学院',icon:'💻',accent:'#7986cb',
+   majors:[
+    {id:'d1',name:'计算机科学与技术',subjects:['数据结构','操作系统','计算机网络','数据库原理','算法设计']},
+    {id:'d2',name:'软件工程',subjects:['软件需求工程','软件设计与架构','软件测试','敏捷开发']},
+    {id:'d3',name:'信息管理与信息系统',subjects:['管理信息系统','数据分析','信息系统项目管理']},
+    {id:'d4',name:'电子信息工程',subjects:['信号与系统','数字电路','通信原理','嵌入式系统']},
+  ]},
+  {id:5,name:'海洋食品与工程学院',icon:'🐟',accent:'#ff8a65',
+   majors:[
+    {id:'e1',name:'食品科学与工程',subjects:['食品化学','食品微生物学','食品工程原理','食品加工工艺']},
+    {id:'e2',name:'食品质量与安全',subjects:['食品安全学','食品检验','食品质量管理','食品法规']},
+  ]},
+  {id:6,name:'机械与船舶工程学院',icon:'⚙️',accent:'#78909c',
+   majors:[
+    {id:'f1',name:'机械设计制造及其自动化',subjects:['机械原理','机械设计','制造工艺','数控技术']},
+    {id:'f2',name:'能源与动力工程',subjects:['工程热力学','流体力学','制冷技术','新能源概论']},
+  ]},
+  {id:7,name:'经济管理学院',icon:'📊',accent:'#ba68c8',
+   majors:[
+    {id:'g1',name:'农林经济管理',subjects:['农业经济学','林业经济学','资源经济学','农村发展']},
+    {id:'g2',name:'会计学',subjects:['基础会计','财务会计','成本会计','审计学','税法']},
+    {id:'g3',name:'市场营销',subjects:['市场营销学','消费者行为学','品牌管理','数字营销']},
+    {id:'g4',name:'经济学',subjects:['微观经济学','宏观经济学','计量经济学','国际贸易']},
+  ]},
+  {id:8,name:'理学院',icon:'📐',accent:'#f06292',
+   majors:[
+    {id:'h1',name:'应用物理学',subjects:['力学','热学','光学','电磁学','量子物理']},
+    {id:'h2',name:'信息与计算科学',subjects:['高等数学','线性代数','概率统计','数值分析','最优化方法']},
+  ]},
+  {id:9,name:'外国语学院',icon:'📚',accent:'#ce93d8',
+   majors:[
+    {id:'i1',name:'英语',subjects:['综合英语','高级英语','英美文学','翻译理论与实践','口译']},
+    {id:'i2',name:'日语',subjects:['基础日语','高级日语','日语视听说','日本文学','商务日语']},
+  ]},
+  {id:10,name:'法学院',icon:'⚖️',accent:'#ef5350',
+   majors:[
+    {id:'j1',name:'法学',subjects:['法理学','宪法学','民法学','刑法学','行政法','诉讼法','国际法']},
+  ]},
+  {id:11,name:'马克思主义学院',icon:'📖',accent:'#e57373',
+   majors:[
+    {id:'k1',name:'思想政治教育',subjects:['马克思主义基本原理','毛泽东思想','中国近现代史','思想道德修养']},
+  ]},
+  {id:12,name:'国际教育学院',icon:'🌏',accent:'#4dd0e1',
+   majors:[
+    {id:'l1',name:'汉语言文学（留学生）',subjects:['汉语精读','汉语口语','中国文化概论','HSK备考']},
+  ]},
+];
+
+// ===== 星座数据（每门课的图标形状） =====
+const CONSTELLATIONS={
+  // 大一上
+  '大学化学C':{color:'#ff8a65',stars:[{x:44,y:8},{x:56,y:8},{x:56,y:28},{x:62,y:33},{x:72,y:42},{x:85,y:58},{x:88,y:75},{x:78,y:90},{x:50,y:95},{x:22,y:90},{x:12,y:75},{x:15,y:58},{x:28,y:42},{x:38,y:33},{x:44,y:28},{x:50,y:50},{x:35,y:65},{x:65,y:65}],lines:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[13,14],[14,2],[15,16],[15,17],[16,11],[17,5]]},
+  '大学计算机基础':{color:'#7986cb',stars:[{x:18,y:15},{x:82,y:15},{x:84,y:52},{x:16,y:52},{x:8,y:65},{x:92,y:65},{x:92,y:80},{x:8,y:80},{x:42,y:28},{x:58,y:28},{x:58,y:40},{x:42,y:40}],lines:[[0,1],[1,2],[2,3],[3,0],[5,6],[6,7],[7,4],[3,4],[2,5],[8,9],[9,10],[10,11],[11,8]]},
+  '高等数学C':{color:'#f06292',stars:[{x:10,y:88},{x:90,y:88},{x:90,y:12},{x:50,y:18},{x:50,y:82},{x:30,y:38},{x:70,y:62},{x:28,y:58},{x:72,y:42}],lines:[[0,1],[1,2],[2,0],[3,5],[5,6],[6,4],[4,7],[7,3],[8,6]]},
+  '普通动物学':{color:'#81c784',stars:[{x:50,y:10},{x:75,y:20},{x:90,y:45},{x:85,y:75},{x:60,y:90},{x:35,y:85},{x:15,y:60},{x:10,y:30},{x:30,y:15}],lines:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,0]]},
+  '大学英语一':{color:'#ba68c8',stars:[{x:50,y:8},{x:50,y:92},{x:12,y:5},{x:12,y:85},{x:44,y:92},{x:44,y:8},{x:88,y:5},{x:88,y:85},{x:56,y:92},{x:56,y:8},{x:22,y:25},{x:22,y:50},{x:22,y:72},{x:78,y:25},{x:78,y:50},{x:78,y:72}],lines:[[0,1],[2,3],[3,4],[4,5],[5,2],[6,7],[7,8],[8,9],[9,6],[2,5],[6,9],[5,8],[10,11],[11,12],[13,14],[14,15]]},
+  // 大一下
+  '生物统计及应用':{color:'#4dd0e1',stars:[{x:50,y:10},{x:80,y:25},{x:90,y:55},{x:75,y:85},{x:45,y:95},{x:20,y:80},{x:8,y:50},{x:15,y:20},{x:50,y:45},{x:50,y:75}],lines:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],[8,9],[0,8],[9,4]]},
+  '海洋动物学':{color:'#29b6f6',stars:[{x:92,y:45},{x:80,y:32},{x:65,y:27},{x:50,y:30},{x:36,y:36},{x:22,y:33},{x:12,y:28},{x:92,y:55},{x:80,y:68},{x:65,y:73},{x:50,y:70},{x:36,y:64},{x:22,y:67},{x:12,y:72},{x:50,y:18},{x:42,y:8},{x:58,y:8},{x:50,y:82},{x:42,y:92},{x:58,y:92}],lines:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[0,7],[6,13],[3,14],[14,15],[14,16],[10,17],[17,18],[17,19]]},
+  '有机化学':{color:'#ef5350',stars:[{x:50,y:8},{x:30,y:25},{x:15,y:50},{x:25,y:80},{x:50,y:92},{x:75,y:80},{x:85,y:50},{x:70,y:25}],lines:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0]]},
+  '大学英语二':{color:'#ce93d8',stars:[{x:50,y:8},{x:50,y:92},{x:12,y:5},{x:12,y:85},{x:44,y:92},{x:44,y:8},{x:88,y:5},{x:88,y:85},{x:56,y:92},{x:56,y:8},{x:22,y:25},{x:22,y:50},{x:22,y:72},{x:78,y:25},{x:78,y:50},{x:78,y:72}],lines:[[0,1],[2,3],[3,4],[4,5],[5,2],[6,7],[7,8],[8,9],[9,6],[2,5],[6,9],[5,8],[10,11],[11,12],[13,14],[14,15]]},
+  // 公共课
+  '中国近现代史纲要':{color:'#ff8a65',stars:[{x:50,y:10},{x:80,y:30},{x:70,y:65},{x:30,y:65},{x:20,y:30}],lines:[[0,1],[1,2],[2,3],[3,4],[4,0]]},
+  '马克思主义基本原理':{color:'#e57373',stars:[{x:50,y:10},{x:80,y:30},{x:70,y:65},{x:30,y:65},{x:20,y:30}],lines:[[0,1],[1,2],[2,3],[3,4],[4,0]]},
+  '毛泽东思想':{color:'#ef9a9a',stars:[{x:50,y:10},{x:80,y:30},{x:70,y:65},{x:30,y:65},{x:20,y:30}],lines:[[0,1],[1,2],[2,3],[3,4],[4,0]]},
+  '思想道德修养':{color:'#ffab91',stars:[{x:50,y:10},{x:80,y:30},{x:70,y:65},{x:30,y:65},{x:20,y:30}],lines:[[0,1],[1,2],[2,3],[3,4],[4,0]]},
+};
+
+// 默认星座数据（未定义的科目用这个）
+const DEFAULT_CSTELL={color:'#6ea8fe',stars:[{x:50,y:10},{x:80,y:30},{x:70,y:65},{x:30,y:65},{x:20,y:30}],lines:[[0,1],[1,2],[2,3],[3,4],[4,0]]};
+
+// 视频和PPT资源路径（相对于网站根目录）
+const RESOURCES={
+  '生物统计及应用':{
+    videos:{
+      '第一章':'第一章.mp4',
+      '第二章':'第二章.mp4',
+      '第三章':'第三章.mp4',
+      '第四章':'第四章.mp4',
+      '第六章':'第六章.mp4',
+      '第七章(1)':'第七章（1）.mp4',
+      '第七章(2)':'第七章（2）.mp4',
+      '第七章(3)':'第七章（3）.mp4',
+      '第八章(1)':'第八章（1）.mp4',
+      '第八章(2)':'第八章（2）.mp4',
+      '第九章(1)':'第九章（1）.mp4',
+      '第九章(2)':'第九章（2）.mp4',
+      '第十章(1)':'第十章（1）.mp4',
+      '第十章(2)':'第十章（2）.mp4',
+      '第十一章(1)':'第十一章（1）.mp4',
+      '第十一章(2)':'第十一章（2）.mp4',
+      '第十二章':'第十二章.mp4'
+    },
+    ppts:{
+      '第一章 绪论':'第一章 绪论.pptx',
+      '第二章 理论':'第二章-理论.pptx',
+      '第三章 理论':'第三章 理论.pptx',
+      '第四章 理论':'第四章 理论.pptx',
+      '第五章 理论':'第五章  理论.pptx',
+      '第1章 SPSS':'第1章-spss.ppt',
+      '第2章 SPSS':'第2章-SPSS.ppt',
+      '第3章 SPSS':'第3章-spss.ppt',
+      '第4章 SPSS':'第4章-spss.ppt',
+      '第5章 SPSS':'第5章-spss.ppt',
+      '第6章 SPSS':'第6章-spss.ppt',
+      '第7章 SPSS':'第7章-spss.ppt',
+      '第8章 SPSS':'第8章-spss.ppt',
+      'SPSS与T检验':'生物统计及软件应用6-SPSS与T检验(1).pptx',
+      'SPSS与方差分析':'生物统计及软件应用7-SPSS与方差分析.pptx',
+      'SPSS与非参数检验':'生物统计及软件应用8-SPSS与非参数检验.pptx',
+      'SPSS与一元线性回归':'生物统计及软件应用9-SPSS与一元线性回归.pptx'
+    },
+    docs:{
+      '教学大纲':'教学大纲.docx',
+      '教学日历':'教学日历.doc',
+      '课程简介':'课程简介.docx',
+      '生物统计教材':'生物统计2018.pdf',
+      '试题集及答案':'生物统计学试题集及答案给你们.pdf',
+      '期末复习题':'生物统计期末考试复习题.pdf',
+      '题库':'生物统计题库.pdf'
+    }
+  }
+};
+
+// 知识点数据（按科目）
+const KNOWLEDGE={
+  '鱼类学':[
+    {unit:'第一单元',title:'鱼类外部形态结构',type:'笔记',source:'刘学姐',detail:['体型分类','鳞片结构','鳍的功能','体色']},
+    {unit:'第二单元',title:'鱼类内部解剖构造',type:'笔记',source:'刘学姐',detail:['骨骼系统','肌肉系统','消化系统','呼吸系统']},
+    {unit:'第三单元',title:'鱼类分类系统',type:'重点',source:'赵老师',detail:['分类阶元','常见目','常见科','检索表']},
+    {unit:'第四单元',title:'淡水鱼类代表种',type:'笔记',source:'张学长',detail:['鲤形目','鲈形目','鲶形目']},
+    {unit:'第五单元',title:'海水鱼类代表种',type:'笔记',source:'张学长',detail:['石首鱼','鲷鱼','比目鱼']},
+    {unit:'第六单元',title:'鱼类生态与行为',type:'课件',source:'赵老师',detail:['栖息环境','繁殖行为','洄游习性']},
+    {unit:'期末复习',title:'往年期末真题精选',type:'试卷',source:'匿名',detail:['历年真题','高频考点']},
+  ],
+  '水族科学导论':[
+    {unit:'第一单元',title:'水族科学的定义与研究范畴',type:'笔记',source:'张学长',detail:['学科定义','研究对象','水族产业概况','国内外发展对比']},
+    {unit:'第二单元',title:'水族产业发展历史',type:'笔记',source:'李老师',detail:['古代水族文化','近代水族产业','现代观赏鱼市场']},
+    {unit:'第三单元',title:'水族箱类型与设计原理',type:'课件',source:'王老师',detail:['水族箱分类','过滤系统原理','光照系统设计','温控系统']},
+    {unit:'第四单元',title:'水质基础参数与调控',type:'重点',source:'李老师',detail:['溶解氧','pH值','氨氮','温度控制']},
+    {unit:'第五单元',title:'水族观赏鱼品种概览',type:'笔记',source:'张学长',detail:['热带鱼','冷水鱼','海水鱼','淡水鱼']},
+    {unit:'期中复习',title:'期中考试重点',type:'重点',source:'李老师',detail:['核心概念','必背公式','重点章节']},
+    {unit:'期末复习',title:'往年期末试卷（含答案）',type:'试卷',source:'匿名',detail:['选择题','填空题','简答题','论述题']},
+  ],
+  '水产动物疾病学':[
+    {unit:'第一单元',title:'水产动物疾病学概述',type:'笔记',source:'吴学长',detail:['疾病分类','发病原因','诊断方法']},
+    {unit:'第二单元',title:'常见鱼病图鉴与诊断',type:'笔记',source:'吴学长',detail:['细菌性疾病','病毒性疾病','寄生虫病']},
+    {unit:'第三单元',title:'细菌性疾病',type:'重点',source:'钱老师',detail:['烂鳃病','肠炎病','竖鳞病']},
+    {unit:'第四单元',title:'寄生虫性疾病',type:'笔记',source:'吴学长',detail:['车轮虫','小瓜虫','指环虫']},
+    {unit:'药物手册',title:'常用药物使用规范速查',type:'重点',source:'钱老师',detail:['抗生素','消毒剂','中草药']},
+  ],
+  '水化学':[
+    {unit:'第一单元',title:'水的化学基础',type:'笔记',source:'赵学长',detail:['水分子结构','水的物理性质','溶液理论']},
+    {unit:'第二单元',title:'溶解氧与pH值',type:'笔记',source:'赵学长',detail:['溶解氧测定','pH测定方法','缓冲体系']},
+    {unit:'第三单元',title:'氨氮与亚硝酸盐',type:'重点',source:'孙老师',detail:['氨氮来源','亚硝酸盐毒性','硝化作用']},
+    {unit:'实验一',title:'水质检测实验报告模板',type:'模板',source:'匿名',detail:['实验步骤','数据记录','结果分析']},
+    {unit:'期末复习',title:'化学方程式必背清单',type:'重点',source:'孙老师',detail:['必背方程式','计算题技巧']},
+  ],
+  '大学英语':[
+    {unit:'Unit 1',title:'重点词汇与短语整理',type:'笔记',source:'陈学姐',detail:['核心词汇','短语搭配','例句']},
+    {unit:'Unit 2',title:'长难句解析与翻译技巧',type:'笔记',source:'陈学姐',detail:['句子结构','翻译技巧','常见句型']},
+    {unit:'Unit 3',title:'阅读理解高频题型',type:'重点',source:'匿名',detail:['主旨题','细节题','推断题']},
+    {unit:'写作',title:'作文模板与高分句型',type:'模板',source:'匿名',detail:['议论文模板','图表作文','高分句式']},
+    {unit:'四级备考',title:'四级真题精选训练',type:'试卷',source:'匿名',detail:['听力','阅读','写作','翻译']},
+  ],
+  '高等数学':[
+    {unit:'第一章',title:'函数与极限',type:'笔记',source:'周学长',detail:['函数定义','极限概念','无穷小','连续性']},
+    {unit:'第二章',title:'导数与微分',type:'笔记',source:'周学长',detail:['导数定义','求导法则','微分应用']},
+    {unit:'第三章',title:'不定积分',type:'重点',source:'匿名',detail:['基本公式','换元法','分部积分']},
+    {unit:'第四章',title:'定积分及其应用',type:'笔记',source:'周学长',detail:['定积分定义','牛顿公式','面积计算']},
+    {unit:'公式速查',title:'导数与积分公式速查表',type:'重点',source:'匿名',detail:['常用导数','常用积分','三角公式']},
+    {unit:'期末复习',title:'期末高频题型汇总',type:'试卷',source:'匿名',detail:['极限题','导数题','积分题']},
+  ],
+  '水产养殖学':[
+    {unit:'第一单元',title:'水产养殖概论',type:'笔记',source:'匿名',detail:['养殖历史','养殖模式','产业现状']},
+    {unit:'第二单元',title:'池塘养殖技术',type:'笔记',source:'匿名',detail:['池塘设计','水质管理','放养密度']},
+    {unit:'第三单元',title:'鱼类繁殖技术',type:'重点',source:'匿名',detail:['亲鱼选择','人工催产','苗种培育']},
+  ],
+  '思想政治':[
+    {unit:'专题一',title:'马克思主义基本原理',type:'重点',source:'匿名',detail:['唯物论','辩证法','认识论','唯物史观']},
+    {unit:'专题二',title:'唯物辩证法核心考点',type:'重点',source:'匿名',detail:['矛盾分析','质量互变','否定之否定']},
+    {unit:'专题三',title:'毛泽东思想概论',type:'笔记',source:'孙学姐',detail:['新民主主义革命','社会主义改造']},
+    {unit:'答题技巧',title:'大题答题模板',type:'模板',source:'孙学姐',detail:['审题技巧','答题框架','得分要点']},
+    {unit:'选择题',title:'选择题必背100条',type:'重点',source:'匿名',detail:['高频考点','易错点','时间线']},
+  ],
+  '计算机基础':[
+    {unit:'第一单元',title:'计算机基础知识',type:'笔记',source:'匿名',detail:['发展历史','组成原理','进制转换']},
+    {unit:'第二单元',title:'操作系统基础',type:'笔记',source:'匿名',detail:['Windows操作','文件管理','系统设置']},
+    {unit:'Office',title:'Word/Excel/PPT操作题汇总',type:'重点',source:'匿名',detail:['Word排版','Excel函数','PPT制作']},
+    {unit:'题库',title:'选择题题库500道',type:'试卷',source:'匿名',detail:['单选','多选','判断']},
+  ],
+  '生物统计及应用':[
+    {unit:'第一章',title:'绪论 - 生物统计基础',type:'视频',source:'教师',detail:['统计学定义','基本概念','数据类型','统计学在生物学中的应用'],video:'第一章',ppt:'第一章 绪论'},
+    {unit:'第二章',title:'数据描述与图表',type:'视频',source:'教师',detail:['描述统计','图表展示','集中趋势','离散程度'],video:'第二章',ppt:'第二章 理论'},
+    {unit:'第三章',title:'概率与概率分布',type:'视频',source:'教师',detail:['概率基础','二项分布','正态分布','中心极限定理'],video:'第三章',ppt:'第三章 理论'},
+    {unit:'第四章',title:'统计推断基础',type:'视频',source:'教师',detail:['参数估计','假设检验','置信区间','显著性水平'],video:'第四章',ppt:'第四章 理论'},
+    {unit:'第五章',title:'t检验',type:'PPT',source:'教师',detail:['单样本t检验','配对t检验','独立样本t检验','SPSS操作'],ppt:'第五章 理论'},
+    {unit:'第六章',title:'方差分析',type:'视频',source:'教师',detail:['单因素方差分析','多重比较','方差齐性检验','SPSS操作'],video:'第六章'},
+    {unit:'第七章',title:'方差分析进阶',type:'视频',source:'教师',detail:['双因素方差分析','交互作用','SPSS实操(1)','SPSS实操(2)','SPSS实操(3)'],video:'第七章(1)',videos:['第七章(1)','第七章(2)','第七章(3)']},
+    {unit:'第八章',title:'非参数检验',type:'视频',source:'教师',detail:['卡方检验','Wilcoxon检验','Kruskal-Wallis检验','SPSS操作'],video:'第八章(1)',videos:['第八章(1)','第八章(2)']},
+    {unit:'第九章',title:'相关与回归',type:'视频',source:'教师',detail:['相关分析','一元线性回归','回归方拟合','SPSS操作'],video:'第九章(1)',videos:['第九章(1)','第九章(2)']},
+    {unit:'第十章',title:'多元统计分析',type:'视频',source:'教师',detail:['多元回归','逐步回归','回归诊断','SPSS操作'],video:'第十章(1)',videos:['第十章(1)','第十章(2)']},
+    {unit:'第十一章',title:'试验设计',type:'视频',source:'教师',detail:['试验设计基础','随机化设计','区组设计','SPSS操作'],video:'第十一章(1)',videos:['第十一章(1)','第十一章(2)']},
+    {unit:'第十二章',title:'协方差分析',type:'视频',source:'教师',detail:['协方差分析原理','SPSS操作','结果解释','实际应用'],video:'第十二章'},
+    {unit:'SPSS操作',title:'SPSS软件应用专题',type:'PPT',source:'教师',detail:['T检验操作','方差分析操作','非参数检验操作','回归分析操作'],ppt:'SPSS与T检验',ppts:['SPSS与T检验','SPSS与方差分析','SPSS与非参数检验','SPSS与一元线性回归']},
+    {unit:'复习资料',title:'期末复习与题库',type:'试卷',source:'教师',detail:['试题集及答案','期末复习题','题库','教材'],docs:['试题集及答案','期末复习题','题库','生物统计教材']},
+  ],
+};
+
+// 通用默认知识点
+function getDefaultKnowledge(subj){
+  return [
+    {unit:'第一单元',title:subj+' - 核心概念',type:'笔记',source:'待补充',detail:['概念定义','基本原理','应用场景']},
+    {unit:'第二单元',title:subj+' - 重点难点',type:'重点',source:'待补充',detail:['重点知识','常见题型','易错点']},
+    {unit:'期末复习',title:subj+' - 复习资料',type:'试卷',source:'待补充',detail:['往年真题','模拟练习']},
+  ];
+}
+
+// ===== 导航逻辑 =====
+let selCollege=null,selMajor=null,curC=null,curG=null;
+
+function goPage(n){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page3').classList.remove('active');
+  document.getElementById('page'+n).classList.add('active');
+  closeSide();
+  closeMindmap();
+  if(n===1)renderColleges();
+  if(n===2)renderMajors();
+}
+
+function backToMajors(){
+  closeSide();
+  closeMindmap();
+  document.getElementById('page3').classList.remove('active');
+  document.getElementById('page2').classList.add('active');
+  renderMajors();
+}
+
+// 第1层：学院列表
+function renderColleges(){
+  const g=document.getElementById('collegeGrid');
+  g.innerHTML=COLLEGES.map(c=>`
+    <div class="card" style="--accent:${c.accent}" onclick="selectCollege(${c.id})">
+      <div class="card-icon">${c.icon}</div>
+      <div class="card-name">${c.name}</div>
+      <div class="card-count">${c.majors.length} 个专业</div>
+      <div class="card-arrow">→</div>
+    </div>`).join('');
+}
+
+function selectCollege(id){
+  selCollege=COLLEGES.find(c=>c.id===id);
+  goPage(2);
+}
+
+// 第2层：专业列表
+function renderMajors(){
+  if(!selCollege)return;
+  document.getElementById('majorTitle').textContent=selCollege.name;
+  document.getElementById('majorBC').textContent=`首页 / ${selCollege.name} / 专业`;
+  document.getElementById('majorDesc').textContent=`${selCollege.name}下设有 ${selCollege.majors.length} 个专业，选择你的专业`;
+  const g=document.getElementById('majorGrid');
+  g.innerHTML=selCollege.majors.map(m=>`
+    <div class="card" style="--accent:${selCollege.accent}" onclick="selectMajor('${m.id}')">
+      <div class="card-icon">${selCollege.icon}</div>
+      <div class="card-name">${m.name}</div>
+      <div class="card-count">${m.subjects.length} 门学科</div>
+      <div class="card-arrow">→</div>
+    </div>`).join('');
+}
+
+function selectMajor(id){
+  selMajor=selCollege.majors.find(m=>m.id===id);
+  if(!selMajor)return;
+  document.getElementById('starmapTitle').textContent=selMajor.name+' · 知识星图';
+  document.getElementById('starmapBC').textContent=`${selCollege.name} / ${selMajor.name}`;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page3').classList.add('active');
+  setTimeout(layoutC,100);
+}
+
+// ===== 第3层：星图 =====
+function layoutC(){
+  const L=document.getElementById('cLayer');L.innerHTML='';
+  if(!selMajor)return;
+  const W=innerWidth,H=innerHeight;
+  const subs=selMajor.subjects;
+  const n=subs.length;
+
+  // 根据科目数量布局星座
+  const positions=getPositions(n,W,H);
+
+  subs.forEach((sub,i)=>{
+    const cst=CONSTELLATIONS[sub]||DEFAULT_CSTELL;
+    const pos=positions[i];
+    const bx=pos.x,by=pos.y;
+    const sc=Math.min(W,H)*0.1;
+
+    // 连线
+    cst.lines.forEach(([a,b])=>{
+      const s1=cst.stars[a],s2=cst.stars[b];
+      if(!s1||!s2)return;
+      const x1=bx+(s1.x-50)/100*sc,y1=by+(s1.y-50)/100*sc;
+      const x2=bx+(s2.x-50)/100*sc,y2=by+(s2.y-50)/100*sc;
+      const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy),ang=Math.atan2(dy,dx)*180/Math.PI;
+      const glow=document.createElement('div');glow.className='cLine';
+      glow.style.cssText=`left:${x1}px;top:${y1}px;width:${len}px;transform:rotate(${ang}deg);height:6px;background:linear-gradient(90deg,${cst.color}00,${cst.color}22,${cst.color}00);filter:blur(3px)`;
+      L.appendChild(glow);
+      const line=document.createElement('div');line.className='cLine';
+      line.style.cssText=`left:${x1}px;top:${y1}px;width:${len}px;transform:rotate(${ang}deg);height:1.5px;background:linear-gradient(90deg,${cst.color}10,${cst.color}50,${cst.color}10)`;
+      L.appendChild(line);
+    });
+
+    // 星星
+    cst.stars.forEach((s,si)=>{
+      const sx=bx+(s.x-50)/100*sc,sy=by+(s.y-50)/100*sc;
+      const glow=document.createElement('div');glow.className='cStarGlow';
+      glow.style.cssText=`left:${sx-14}px;top:${sy-14}px;width:28px;height:28px;background:radial-gradient(circle,${cst.color}35,${cst.color}0a,transparent);filter:blur(4px)`;
+      L.appendChild(glow);
+      const star=document.createElement('div');star.className='cStar';
+      const r=si<2?5:3.5;
+      star.style.cssText=`left:${sx-r}px;top:${sy-r}px;width:${r*2}px;height:${r*2}px;background:radial-gradient(circle at 35% 35%,#fff,${cst.color},${cst.color}88);box-shadow:0 0 ${r*2}px ${cst.color},0 0 ${r*5}px ${cst.color}55`;
+      L.appendChild(star);
+    });
+
+    // 标签
+    const label=document.createElement('div');label.className='cLabel';
+    label.style.cssText=`left:${bx-55}px;top:${by+sc*0.55}px;width:110px;--gc:${cst.color}`;
+    label.innerHTML=`<div class="cName">${sub}</div><div class="cSub">${(KNOWLEDGE[sub]||getDefaultKnowledge(sub)).length} 份资料</div>`;
+    label.onclick=()=>openSide(sub);
+    L.appendChild(label);
+  });
+}
+
+function getPositions(n,W,H){
+  const pts=[];
+  const pad=80;
+  if(n<=3){
+    const cx=W/2,cy=H/2+30;
+    const r=Math.min(W,H)*0.22;
+    for(let i=0;i<n;i++){const a=(i/n)*Math.PI*2-Math.PI/2;pts.push({x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)})}
+  }else if(n<=6){
+    const cx=W/2,cy=H/2+30;
+    const rx=Math.min(W*0.32,380),ry=Math.min(H*0.26,280);
+    for(let i=0;i<n;i++){const a=(i/n)*Math.PI*2-Math.PI/2;pts.push({x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a)})}
+  }else{
+    const cols=Math.ceil(n/2);
+    const gapX=(W-pad*2)/cols,gapY=(H-120)/2;
+    for(let i=0;i<n;i++){const row=Math.floor(i/cols),col=i%cols;const cx2=pad+gapX*(col+0.5);const cy2=120+gapY*(row+0.5);pts.push({x:cx2,y:cy2})}
+  }
+  return pts;
+}
+
+// ===== 右侧面板 =====
+function openSide(sub){
+  curC=sub;
+  document.getElementById('cLayer').classList.add('zoomed');
+  const data=KNOWLEDGE[sub]||getDefaultKnowledge(sub);
+  const el=document.getElementById('sideContent');
+  const units={};data.forEach(d=>{if(!units[d.unit])units[d.unit]=[];units[d.unit].push(d)});
+
+  el.innerHTML=`
+    <div class="side-head"><h3>${sub}</h3><div class="desc">${data.length} 份学习资料</div></div>
+    <div class="unit-grid">
+    ${Object.keys(units).map(k=>`
+      <div class="unit-col"><div class="unit-col-title">${k}</div>
+      ${units[k].map((item,idx)=>{
+        const safeTitle=item.title.replace(/'/g,"\\'");
+        return`<div class="unit-item" onclick="console.log('clicked','${item.unit}');openMindmapSafe('${sub}','${item.unit}',${idx})"><div style="font-weight:500">${item.title}</div><div style="font-size:.6rem;color:rgba(255,255,255,.25);margin-top:2px">${item.type} · ${item.source}</div></div>`;
+      }).join('')}</div>`).join('')}
+    </div>`;
+  setTimeout(()=>{document.getElementById('sidePanel').classList.add('open');document.getElementById('overlay').classList.add('show')},350);
+}
+
+function closeSide(){document.getElementById('sidePanel').classList.remove('open');document.getElementById('overlay').classList.remove('show');document.getElementById('cLayer').classList.remove('zoomed');curC=null}
+
+// ===== 脑图 =====
+function openMindmapSafe(sub,unit,idx){
+  console.log('openMindmapSafe called:',sub,unit,idx);
+  const data=KNOWLEDGE[sub]||getDefaultKnowledge(sub);
+  const item=data.find(d=>d.unit===unit);
+  if(!item){console.log('item not found');return}
+  openMindmapFromData({
+    sub:sub,
+    unit:unit,
+    title:item.title,
+    detail:item.detail||[],
+    video:item.video,
+    videos:item.videos,
+    ppt:item.ppt,
+    ppts:item.ppts,
+    docs:item.docs
+  });
+}
+
+function openMindmap(sub,unit,title,detail){
+  closeSide();
+  document.getElementById('mmTitle').textContent=title;
+  document.getElementById('mmBC').textContent=`${selCollege.name} / ${selMajor.name} / ${sub} / ${unit}`;
+  const colors=['#6ea8fe','#c084fc','#fb7185','#4ade80','#facc15','#38bdf8'];
+  document.getElementById('mmBody').innerHTML=`
+    <div class="mm-center">
+      <div class="mm-root">${title}</div>
+      <div class="mm-branches">
+        ${detail.map((d,i)=>{const col=colors[i%colors.length];return`<div class="mm-node" style="border-color:${col}33"><div class="mm-node-title" style="color:${col}">${d}</div><div class="mm-node-sub">${unit}</div><div class="mm-node-tag tag-note">核心要点</div><div class="mm-sub"><div class="mm-sub-item" style="padding-left:8px;border-left:2px solid ${col}44">点击查看详细内容</div></div></div>`}).join('')}
+      </div>
+    </div>`;
+  document.getElementById('mindmapPage').classList.add('show');
+}
+
+function openMindmapFromData(itemData){
+  console.log('openMindmapFromData called:',itemData);
+  closeSide();
+  const {sub,unit,title,detail,video,videos,ppt,ppts,docs}=itemData;
+  console.log('detail:',detail,'video:',video,'ppt:',ppt);
+  document.getElementById('mmTitle').textContent=title;
+  document.getElementById('mmBC').textContent=`${selCollege.name} / ${selMajor.name} / ${sub} / ${unit}`;
+  const colors=['#6ea8fe','#c084fc','#fb7185','#4ade80','#facc15','#38bdf8'];
+  const resources=RESOURCES[sub];
+
+  let resourceButtons='';
+
+  // 添加视频按钮
+  if(video && resources && resources.videos[video]){
+    resourceButtons+=`<div class="mm-node" style="border-color:#ff6b6b33"><div class="mm-node-title" style="color:#ff6b6b">📹 视频教程</div><div class="mm-node-sub">点击播放</div><div class="mm-node-tag tag-video">视频</div><div class="mm-sub"><div class="mm-sub-item video-item" onclick="playVideo('${sub}','${video}')">▶ 播放视频</div></div></div>`;
+  }
+  if(videos && videos.length>0){
+    resourceButtons+=`<div class="mm-node" style="border-color:#ff6b6b33"><div class="mm-node-title" style="color:#ff6b6b">📹 多节视频</div><div class="mm-node-sub">${videos.length}个视频</div><div class="mm-node-tag tag-video">视频组</div><div class="mm-sub">${videos.map(v=>`<div class="mm-sub-item video-item" onclick="playVideo('${sub}','${v}')">▶ ${v}</div>`).join('')}</div></div>`;
+  }
+
+  // 添加PPT按钮
+  if(ppt && resources && resources.ppts[ppt]){
+    resourceButtons+=`<div class="mm-node" style="border-color:#ffb46433"><div class="mm-node-title" style="color:#ffb464">📊 PPT课件</div><div class="mm-node-sub">点击查看</div><div class="mm-node-tag tag-ppt">PPT</div><div class="mm-sub"><div class="mm-sub-item ppt-item" onclick="viewPpt('${sub}','${ppt}')">📄 查看PPT</div></div></div>`;
+  }
+  if(ppts && ppts.length>0){
+    resourceButtons+=`<div class="mm-node" style="border-color:#ffb46433"><div class="mm-node-title" style="color:#ffb464">📊 PPT合集</div><div class="mm-node-sub">${ppts.length}个PPT</div><div class="mm-node-tag tag-ppt">PPT组</div><div class="mm-sub">${ppts.map(p=>`<div class="mm-sub-item ppt-item" onclick="viewPpt('${sub}','${p}')">📄 ${p}</div>`).join('')}</div></div>`;
+  }
+
+  // 添加文档按钮
+  if(docs && docs.length>0){
+    resourceButtons+=`<div class="mm-node" style="border-color:#64ffb433"><div class="mm-node-title" style="color:#64ffb4">📚 学习文档</div><div class="mm-node-sub">${docs.length}份文档</div><div class="mm-node-tag tag-doc">文档</div><div class="mm-sub">${docs.map(d=>`<div class="mm-sub-item doc-item" onclick="openDoc('${sub}','${d}')">📄 ${d}</div>`).join('')}</div></div>`;
+  }
+
+  document.getElementById('mmBody').innerHTML=`
+    <div class="mm-center">
+      <div class="mm-root">${title}</div>
+      <div class="mm-branches">
+        ${detail.map((d,i)=>{const col=colors[i%colors.length];return`<div class="mm-node" style="border-color:${col}33"><div class="mm-node-title" style="color:${col}">${d}</div><div class="mm-node-sub">${unit}</div><div class="mm-node-tag tag-note">核心要点</div><div class="mm-sub"><div class="mm-sub-item" style="padding-left:8px;border-left:2px solid ${col}44">点击查看详细内容</div></div></div>`}).join('')}
+        ${resourceButtons}
+      </div>
+    </div>`;
+  document.getElementById('mindmapPage').classList.add('show');
+}
+
+function closeMindmap(){document.getElementById('mindmapPage').classList.remove('show')}
+
+// ===== 视频播放 =====
+let currentVideoList=[];
+let currentVideoIndex=0;
+
+function playVideo(sub,videoKey){
+  const resources=RESOURCES[sub];
+  if(!resources || !resources.videos[videoKey])return;
+
+  const videoFile=resources.videos[videoKey];
+  const videoPath=`D:/ai学习资料库/${videoFile}`;
+
+  document.getElementById('videoTitle').textContent=videoKey+' - 视频教程';
+  document.getElementById('videoSource').src=videoPath;
+  document.getElementById('videoElement').load();
+
+  // 更新视频列表
+  currentVideoList=Object.entries(resources.videos);
+  currentVideoIndex=currentVideoList.findIndex(([k])=>k===videoKey);
+  updateVideoList(sub);
+
+  document.getElementById('videoPlayer').classList.add('show');
+}
+
+function updateVideoList(sub){
+  const listEl=document.getElementById('videoList');
+  listEl.innerHTML=currentVideoList.map(([k,v],i)=>`<div class="video-list-item ${i===currentVideoIndex?'active':''}" onclick="switchVideo('${sub}','${k}')">${k}</div>`).join('');
+}
+
+function switchVideo(sub,videoKey){
+  const resources=RESOURCES[sub];
+  if(!resources || !resources.videos[videoKey])return;
+
+  const videoFile=resources.videos[videoKey];
+  const videoPath=`D:/ai学习资料库/${videoFile}`;
+
+  document.getElementById('videoTitle').textContent=videoKey+' - 视频教程';
+  document.getElementById('videoSource').src=videoPath;
+  document.getElementById('videoElement').load();
+
+  currentVideoIndex=currentVideoList.findIndex(([k])=>k===videoKey);
+  updateVideoList(sub);
+}
+
+function closeVideo(){
+  document.getElementById('videoElement').pause();
+  document.getElementById('videoPlayer').classList.remove('show');
+}
+
+// ===== PPT查看 =====
+let currentPptList=[];
+let currentPptIndex=0;
+
+function viewPpt(sub,pptKey){
+  const resources=RESOURCES[sub];
+  if(!resources || !resources.ppts[pptKey])return;
+
+  const pptFile=resources.ppts[pptKey];
+  const pptPath=`D:/ai学习资料库/${pptFile}`;
+
+  document.getElementById('pptTitle').textContent=pptKey+' - PPT课件';
+  document.getElementById('pptContent').innerHTML=`
+    <div style="text-align:center">
+      <div style="font-size:3rem;margin-bottom:20px">📄</div>
+      <div>${pptKey}</div>
+      <div style="font-size:.8rem;margin-top:10px;color:rgba(255,255,255,.3)">文件：${pptFile}</div>
+      <a href="${pptPath}" download style="display:inline-block;margin-top:20px;padding:12px 30px;background:rgba(255,180,100,.2);border:1px solid rgba(255,180,100,.4);border-radius:8px;color:#ffb464;text-decoration:none;font-size:.9rem;transition:all .3s">📥 下载PPT</a>
+    </div>`;
+
+  // 更新PPT列表
+  currentPptList=Object.entries(resources.ppts);
+  currentPptIndex=currentPptList.findIndex(([k])=>k===pptKey);
+  updatePptList(sub);
+
+  document.getElementById('pptViewer').classList.add('show');
+}
+
+function updatePptList(sub){
+  const listEl=document.getElementById('pptList');
+  listEl.innerHTML=currentPptList.map(([k,v],i)=>`<div class="ppt-list-item ${i===currentPptIndex?'active':''}" onclick="switchPpt('${sub}','${k}')">${k}</div>`).join('');
+}
+
+function switchPpt(sub,pptKey){
+  const resources=RESOURCES[sub];
+  if(!resources || !resources.ppts[pptKey])return;
+
+  const pptFile=resources.ppts[pptKey];
+  const pptPath=`D:/ai学习资料库/${pptFile}`;
+
+  document.getElementById('pptTitle').textContent=pptKey+' - PPT课件';
+  document.getElementById('pptContent').innerHTML=`
+    <div style="text-align:center">
+      <div style="font-size:3rem;margin-bottom:20px">📄</div>
+      <div>${pptKey}</div>
+      <div style="font-size:.8rem;margin-top:10px;color:rgba(255,255,255,.3)">文件：${pptFile}</div>
+      <a href="${pptPath}" download style="display:inline-block;margin-top:20px;padding:12px 30px;background:rgba(255,180,100,.2);border:1px solid rgba(255,180,100,.4);border-radius:8px;color:#ffb464;text-decoration:none;font-size:.9rem;transition:all .3s">📥 下载PPT</a>
+    </div>`;
+
+  currentPptIndex=currentPptList.findIndex(([k])=>k===pptKey);
+  updatePptList(sub);
+}
+
+function closePpt(){
+  document.getElementById('pptViewer').classList.remove('show');
+}
+
+// ===== 文档打开 =====
+function openDoc(sub,docKey){
+  const resources=RESOURCES[sub];
+  if(!resources || !resources.docs[docKey])return;
+
+  const docFile=resources.docs[docKey];
+  const docPath=`D:/ai学习资料库/${docFile}`;
+
+  // 直接在新窗口打开文档
+  window.open(docPath,'_blank');
+}
+</script>
+</body>
+</html>
